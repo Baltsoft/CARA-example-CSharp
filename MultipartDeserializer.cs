@@ -1,5 +1,7 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -17,20 +19,48 @@ namespace CARA_example
 
         public T Deserialize<T>(IRestResponse response)
         {
+            var result = new ConvertApiResponse();
             var streamContent = new StreamContent(GenerateStreamFromString(response.Content));
             streamContent.Headers.ContentType = MediaTypeHeaderValue.Parse(response.ContentType);
-
             var provider = streamContent.ReadAsMultipartAsync().Result;
 
-            var result = provider.Contents.Select(content => new ConvertedFileModel
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                result.Files = new List<ConvertedFiles>(); 
+                foreach (var content in provider.Contents)
                 {
-                    Name = Helper.GetFileName(content.Headers.ContentDisposition),
-                    Size = (int)content.Headers.ContentDisposition.Size.GetValueOrDefault(0),
-                    Data = content.Headers.ContentLocation == null ? content.ReadAsByteArrayAsync().Result : null,
-                    Url = content.Headers.ContentLocation
-                })
-                .ToList();
+                    var file = new ConvertedFiles
+                    {
+                        Name = Helper.GetFileName(content.Headers.ContentDisposition),
+                        Size = (int) content.Headers.ContentDisposition.Size.GetValueOrDefault(0),
+                        Data = content.Headers.ContentLocation == null ? content.ReadAsByteArrayAsync().Result : null,
+                        Url = content.Headers.ContentLocation
+                    };
+                    result.Files.Add(file);
+                }   
+            }
+            else
+            {
+                result.ApiError = new ConvertApiResponse.ApiErrorData();
+                foreach (var content in provider.Contents)
+                {
+                    IEnumerable<string> conversionCode;
 
+                    var conversionCodeExist = content.Headers.TryGetValues("Code", out conversionCode);
+                    if (conversionCodeExist)
+                    {
+                        result.ApiError.StatusCode = int.Parse(conversionCode.First());
+                        result.ApiError.ReasonPhrase = content.ReadAsStringAsync().Result;
+                    }
+
+                    IEnumerable<string> parameterValidation;
+                    var parameterValidationExist = content.Headers.TryGetValues("Parameter", out parameterValidation);
+
+                    if (parameterValidationExist)
+                        result.ApiError.ParametersError.Add(new KeyValuePair<string, string>(parameterValidation.First(),
+                            content.ReadAsStringAsync().Result));
+                }
+            }
             return (T)(object)result;
         }
 

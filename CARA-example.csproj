@@ -55,7 +55,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ConvertedFileModel.cs" />
+    <Compile Include="ConvertApiResponse.cs" />
     <Compile Include="MultipartDeserializer.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
